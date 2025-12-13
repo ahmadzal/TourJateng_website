@@ -211,8 +211,8 @@ TOPIK YANG BOLEH DIJAWAB:
     }
 
     console.log('Calling Gemini API...')
-    // Use gemini-1.5-flash (supports both text and images)
-    const modelName = 'gemini-1.5-flash'
+    // Use gemini-2.5-flash (supports both text and images)
+    const modelName = 'gemini-2.5-flash'
     const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`
     
     console.log('Using model:', modelName)
