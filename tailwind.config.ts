@@ -23,10 +23,21 @@ const config: Config = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "slide-in": {
+          from: { 
+            opacity: "0", 
+            transform: "translateX(100%)" 
+          },
+          to: { 
+            opacity: "1", 
+            transform: "translateX(0)" 
+          },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "slide-in": "slide-in 0.3s ease-out forwards",
       },
     },
   },
