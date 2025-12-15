@@ -4,6 +4,9 @@ import ArticleList from "../components/ArticleList";
 import TourBotPreview from "../components/TourBotPreview";
 import FAQ from "../components/FAQ";
 import ClientOnly from "../components/ClientOnly";
+import { Playfair_Display } from "next/font/google";
+
+const playfairDisplay = Playfair_Display({ subsets: ['latin'], weight: ['400', '700', '900'] });
 
 export default function HomePage() {
   return (
@@ -12,7 +15,7 @@ export default function HomePage() {
         <div className="grid grid-cols-1 md:grid-cols-2 items-center gap-6 md:gap-8 lg:gap-12 w-full">
           {/* Left column: text */}
           <div className="max-w-xl mx-auto md:mx-0 text-center md:text-left">
-            <h1 className="text-xl sm:text-2xl lg:text-4xl font-extrabold leading-tight text-gray-900">
+            <h1 className={`text-xl sm:text-2xl lg:text-4xl font-extrabold leading-tight text-gray-900 ${playfairDisplay.className}`}>
               Ciptakan Momen Spesial di Destinasi Menakjubkan Jawa Tengah!
             </h1>
 
@@ -65,7 +68,7 @@ export default function HomePage() {
             <div className="hidden md:flex items-center justify-center order-first">
               <div className="w-full max-w-xs md:max-w-sm lg:max-w-lg rounded-xl">
                 <img
-                  src="/images/wisatawan.jpeg"
+                  src="/images/Bingung.jpeg"
                   alt="Travellers"
                   className="w-full h-auto rounded-md object-cover"
                 />

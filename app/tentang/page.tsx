@@ -320,7 +320,7 @@ export default function TentangPage() {
               </p>
               <div className="mt-6 sm:mt-8 hidden sm:block">
                 <img 
-                  src="/images/Turis.png" 
+                  src="/images/Turiss.jpg" 
                   alt="Wisatawan dengan kamera" 
                   className="w-full h-auto object-cover rounded-lg"
                 />
