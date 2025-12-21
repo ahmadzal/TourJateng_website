@@ -34,12 +34,12 @@ const englishProfanity = [
 const javanesecentalProfanity = [
   'asu', 'jancuk', 'jancok', 'cok', 'cuk', 'matamu', 'ngene', 'ngono',
   'pekok', 'gembel', 'edan', 'gila', 'sinting', 'picek', 'buta',
-  'budeg', 'tuli', 'belo', 'bodho', 'ngunu', 'ra', 'gak', 'ora',
+  'budeg', 'tuli', 'belo', 'bodho', 'ngunu', 'ra', 'ora',
   'kimak', 'tempik', 'jembut', 'itil', 'memeng', 'burung', 'kontol',
   'palkon', 'sempak', 'kathok', 'celeng', 'wedus', 'kethek',
   'bajul', 'ula', 'tokek', 'kadal', 'tikus', 'belatung', 'coro',
   'bangkai', 'mayit', 'jenazah', 'mati', 'pati', 'seda', 'gugur',
-  'tewas', 'wafat', 'mangkat', 'nuju', 'lungo', 'lunga', 'mlaku',
+  'tewas', 'wafat', 'mangkat', 'nuju', 'lungo', 'lunga', 'mlaku', 'crot' , 'ngewe' , 'kondom' , 
   // Kata plesetan Jawa
   'asuw', 'asuk'
 ]

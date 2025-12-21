@@ -543,7 +543,7 @@ export default function ForumDetailPage() {
 
     if (diffMins < 1) return 'baru saja'
     if (diffMins < 60) return `${diffMins} menit yang lalu`
-    if (diffHours < 24) return `${diffHours} hari yang lalu`
+    if (diffHours < 24) return `${diffHours} jam yang lalu`
     return `${diffDays} hari yang lalu`
   }
 
