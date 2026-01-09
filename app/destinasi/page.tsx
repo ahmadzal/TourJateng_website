@@ -38,6 +38,11 @@ interface Destinasi {
   url_gambar: string
   harga_weekday?: string  // From htm table
   harga_weekend?: string  // From htm table
+  // New preference columns (with fallback to text parsing if NULL)
+  durasi_rekomendasi?: string  // 'short', 'medium', 'long'
+  kategori_aktivitas?: string[]  // ['nature', 'culture', 'recreation']
+  tujuan_cocok?: string[]  // ['healing', 'experience', 'content']
+  cocok_untuk?: string[]  // ['solo', 'couple', 'family', 'friends']
 }
 
 const categories = [
@@ -89,11 +94,10 @@ const daerahWisata = [
 ]
 
 interface QuestionnaireData {
-  overnight: boolean  // Apakah ingin menginap
   budget: string
   duration: string
   activities: string[]
-  travelStyle: string
+  travelPurpose: string
   groupSize: string
   preferredLocation?: string  // Optional: kota/kabupaten pilihan user
 }
@@ -131,11 +135,10 @@ export default function DestinasiWisata() {
   const [loadingText, setLoadingText] = useState('')
   const [filteredDestinationsFromPersonalization, setFilteredDestinationsFromPersonalization] = useState<Destinasi[]>([])
   const [questionnaireData, setQuestionnaireData] = useState<QuestionnaireData>({
-    overnight: false,
     budget: '',
     duration: '',
     activities: [],
-    travelStyle: '',
+    travelPurpose: '',
     groupSize: '',
     preferredLocation: ''  // Optional location preference
   })
@@ -223,7 +226,7 @@ export default function DestinasiWisata() {
     }
   }, [showQuestionnaire])
 
-  // Fetch data from Supabase with HTM data
+  // Fetch data from Supabase with HTM data and preference columns
   useEffect(() => {
     const fetchDestinasi = async () => {
       try {
@@ -413,31 +416,11 @@ export default function DestinasiWisata() {
     router.push(`/destinasi/${id}`)
   }
 
-  // Calculate compatibility score based on ALL user preferences
+  // Calculate compatibility score based on user preferences and database data
   // Scoring: +1 (perfect match), +0.5 (partial match), 0 (no match)
-  // Maximum score: 5 points (5 factors)
-  // Note: Location filtering is done separately before scoring
+  // Maximum score: 5 points (5 factors: Budget, Duration, Activity, Purpose, Partner)
   const calculateCompatibility = (destination: Destinasi, preferences: QuestionnaireData): number => {
     let score = 0
-
-    // Declare variables first
-    const kategori = destination.kategori?.toLowerCase() || ''
-    const deskripsi = destination.deskripsi?.toLowerCase() || ''
-
-    // Filter: Jika user ingin menginap, HARUS ada fasilitas camping/menginap
-    const hasCampingFacility = deskripsi.includes('camping') || 
-                               deskripsi.includes('kemah') || 
-                               deskripsi.includes('berkemah') ||
-                               deskripsi.includes('menginap') ||
-                               deskripsi.includes('bermalam') ||
-                               deskripsi.includes('penginapan') ||
-                               kategori.includes('resort') ||
-                               kategori.includes('glamping')
-    
-    // Hard filter: Jika overnight = true dan tidak ada fasilitas camping, return 0
-    if (preferences.overnight && !hasCampingFacility) {
-      return 0  // Tidak cocok sama sekali
-    }
 
     // 1. Budget Score (Budget per orang × jumlah orang)
     // Estimasi jumlah orang berdasarkan travel partner
@@ -457,120 +440,73 @@ export default function DestinasiWisata() {
     const parkingCost = jumlahOrang >= 3 ? parkingMobil : parkingMotor  // Mobil jika 3+ orang, motor jika <3
     const totalBiayaDestinasi = htmTotal + parkingCost
     
-    // Budget tersedia (budget per orang × jumlah orang)
+    // Budget scoring: Simple & straightforward
     let budgetPerOrang = 0
     let budgetTersedia = 0
+    const toleransi = 10000  // Toleransi Rp 10k untuk semua kategori
     
     if (preferences.budget === 'basic') {
-      budgetPerOrang = 50000  // <50k per orang
+      budgetPerOrang = 30000  // <30k per orang
       budgetTersedia = budgetPerOrang * jumlahOrang
-      // Hemat: Biaya destinasi harus <70% budget (sisanya untuk jajan)
-      if (totalBiayaDestinasi < budgetTersedia * 0.5) score += 1  // Banyak sisa (>50%)
-      else if (totalBiayaDestinasi < budgetTersedia * 0.7) score += 0.5  // Cukup sisa (30-50%)
     } else if (preferences.budget === 'value') {
-      budgetPerOrang = 100000  // ~50-150k per orang, ambil tengah
+      budgetPerOrang = 45000  // ~40-50k per orang
       budgetTersedia = budgetPerOrang * jumlahOrang
-      // Budget: Biaya destinasi 30-70% budget
-      if (totalBiayaDestinasi >= budgetTersedia * 0.3 && totalBiayaDestinasi < budgetTersedia * 0.6) score += 1  // Ideal
-      else if (totalBiayaDestinasi < budgetTersedia * 0.75) score += 0.5  // Masih oke
     } else if (preferences.budget === 'plus') {
-      budgetPerOrang = 225000  // ~150-300k per orang, ambil tengah
+      budgetPerOrang = 70000  // ~60-80k per orang
       budgetTersedia = budgetPerOrang * jumlahOrang
-      // Menengah: Biaya destinasi 40-70% budget
-      if (totalBiayaDestinasi >= budgetTersedia * 0.4 && totalBiayaDestinasi < budgetTersedia * 0.7) score += 1  // Ideal
-      else if (totalBiayaDestinasi < budgetTersedia * 0.8) score += 0.5  // Masih masuk
     } else if (preferences.budget === 'premium') {
-      budgetPerOrang = 400000  // >300k per orang
+      budgetPerOrang = 100000  // >80k per orang
       budgetTersedia = budgetPerOrang * jumlahOrang
-      // Premium: Biaya berapapun oke, prioritas kualitas
-      if (totalBiayaDestinasi >= budgetTersedia * 0.5 || kategori.includes('premium') || deskripsi.includes('eksklusif')) score += 1
-      else if (totalBiayaDestinasi >= budgetTersedia * 0.3) score += 0.5
     }
-
-    // 2. Duration Score (based on destination type, activities, and facilities)
-    // hasCampingFacility sudah dideclare di atas
     
-    if (preferences.duration === 'short') {
-      // Singkat 2-3 jam: Museum, taman kecil, spot foto, quick visit
-      if (kategori.includes('museum') || 
-          kategori.includes('spot foto') || 
-          deskripsi.includes('singkat') ||
-          deskripsi.includes('cepat')) score += 1
-      else if (!hasCampingFacility && 
-               !kategori.includes('resort') && 
-               !kategori.includes('taman hiburan')) score += 0.5  // Bisa dikunjungi singkat
-    } else if (preferences.duration === 'medium') {
-      // Sedang 3-6 jam: Wisata standar, taman rekreasi, tidak perlu menginap
-      if (!hasCampingFacility && 
-          !deskripsi.includes('resort') &&
-          (kategori.includes('taman') || 
-           kategori.includes('rekreasi') ||
-           kategori.includes('wisata alam'))) score += 1  // Ideal untuk 3-6 jam
-      else if (!hasCampingFacility) score += 0.5  // Masih bisa dalam sehari
-    } else if (preferences.duration === 'long') {
-      // Panjang 6++ jam: Wisata alam luas, taman hiburan, camping - bisa seharian atau menginap
-      if (kategori.includes('alam') || 
-          kategori.includes('taman hiburan') ||
-          kategori.includes('pantai') ||
-          hasCampingFacility ||
-          deskripsi.includes('luas')) score += 1  // Perfect untuk aktivitas panjang
-      else score += 0.5  // Bisa dihabiskan lama
+    // Score berdasarkan biaya vs budget
+    if (totalBiayaDestinasi <= budgetTersedia) {
+      score += 1  // Pas atau lebih murah dari budget
+    } else if (totalBiayaDestinasi <= budgetTersedia + toleransi) {
+      score += 0.5  // Sedikit over budget (max +10k)
     }
+    // Else 0 poin jika over >10k
 
-    // 3. Activity Category Score (based on selected activities)
-    let activityScore = 0
-    let activityMatches = 0
-    
-    preferences.activities.forEach(activity => {
-      if (activity === 'nature' && kategori.includes('alam')) {
-        activityScore += 1
-        activityMatches++
-      } else if (activity === 'culture' && (kategori.includes('budaya') || kategori.includes('sejarah'))) {
-        activityScore += 1
-        activityMatches++
-      } else if (activity === 'recreation' && (kategori.includes('buatan') || kategori.includes('hiburan') || kategori.includes('rekreasi'))) {
-        activityScore += 1
-        activityMatches++
+    // 2. Duration Score (from database)
+    if (destination.durasi_rekomendasi) {
+      if (preferences.duration === destination.durasi_rekomendasi) {
+        score += 1  // Perfect match
+      } else if (
+        (preferences.duration === 'medium' && destination.durasi_rekomendasi === 'short') ||
+        (preferences.duration === 'long' && destination.durasi_rekomendasi === 'medium')
+      ) {
+        score += 0.5  // Close match
       }
-    })
-    
-    // Average activity match (maximum 1 point)
-    if (activityMatches > 0) {
-      score += Math.min(activityScore / preferences.activities.length, 1)
     }
 
-    // 4. Travel Style Score
-    if (preferences.travelStyle === 'adventure') {
-      // Petualangan: prefer nature, challenging activities
-      if (kategori.includes('alam') && (deskripsi.includes('hiking') || deskripsi.includes('trekking') || deskripsi.includes('pendakian'))) score += 1
-      else if (kategori.includes('alam') || deskripsi.includes('petualangan')) score += 0.5
-    } else if (preferences.travelStyle === 'cultural') {
-      // Kultural: prefer culture, history, tradition
-      if (kategori.includes('budaya') || kategori.includes('sejarah') || kategori.includes('candi')) score += 1
-      else if (kategori.includes('museum') || deskripsi.includes('tradisi')) score += 0.5
-    } else if (preferences.travelStyle === 'relaxed') {
-      // Santai: prefer easy access, comfortable destinations
-      if (kategori.includes('taman') || kategori.includes('pantai') || deskripsi.includes('santai') || deskripsi.includes('pemandangan')) score += 1
-      else if (!deskripsi.includes('menantang') && !deskripsi.includes('sulit')) score += 0.5
+    // 3. Activity Category Score (from database)
+    if (destination.kategori_aktivitas && destination.kategori_aktivitas.length > 0) {
+      let activityScore = 0
+      preferences.activities.forEach(activity => {
+        if (destination.kategori_aktivitas!.includes(activity)) {
+          activityScore += 1
+        }
+      })
+      // Average activity match (maximum 1 point)
+      if (preferences.activities.length > 0) {
+        score += Math.min(activityScore / preferences.activities.length, 1)
+      }
     }
 
-    // 5. Travel Partner Score (group size compatibility)
-    if (preferences.groupSize === 'solo') {
-      // Solo: prefer accessible, safe, easy destinations
-      if (deskripsi.includes('aman') || kategori.includes('museum') || kategori.includes('taman')) score += 1
-      else if (!deskripsi.includes('grup') && !deskripsi.includes('rombongan')) score += 0.5
-    } else if (preferences.groupSize === 'couple') {
-      // Berdua: prefer romantic, scenic destinations
-      if (deskripsi.includes('romantis') || kategori.includes('pantai') || kategori.includes('pemandangan')) score += 1
-      else if (kategori.includes('alam') || kategori.includes('taman')) score += 0.5
-    } else if (preferences.groupSize === 'family') {
-      // Keluarga: prefer family-friendly, safe, educational
-      if (deskripsi.includes('keluarga') || kategori.includes('taman') || kategori.includes('edukasi') || kategori.includes('museum')) score += 1
-      else if (!deskripsi.includes('ekstrem') && !deskripsi.includes('berbahaya')) score += 0.5
-    } else if (preferences.groupSize === 'friends') {
-      // Teman: prefer fun, group activities
-      if (kategori.includes('hiburan') || kategori.includes('rekreasi') || deskripsi.includes('foto') || deskripsi.includes('grup')) score += 1
-      else score += 0.5
+    // 4. Travel Purpose Score (from database)
+    if (destination.tujuan_cocok && destination.tujuan_cocok.length > 0) {
+      if (destination.tujuan_cocok.includes(preferences.travelPurpose)) {
+        score += 1  // Perfect match
+      }
+    }
+
+    // 5. Travel Partner Score (from database)
+    if (destination.cocok_untuk && destination.cocok_untuk.length > 0) {
+      if (destination.cocok_untuk.includes(preferences.groupSize)) {
+        score += 1  // Perfect match
+      } else if (destination.cocok_untuk.length >= 3) {
+        score += 0.5  // Suitable for most groups
+      }
     }
 
     // Return score (0-5 range)
@@ -588,7 +524,7 @@ export default function DestinasiWisata() {
       { percent: 20, text: 'Menganalisis preferensi budget...', delay: 300 },
       { percent: 40, text: 'Mencocokkan durasi perjalanan...', delay: 400 },
       { percent: 60, text: 'Mengevaluasi kategori aktivitas...', delay: 350 },
-      { percent: 80, text: 'Menghitung gaya traveling & partner...', delay: 400 },
+      { percent: 80, text: 'Menghitung tujuan traveling & partner...', delay: 400 },
       { percent: 100, text: 'Menyiapkan rekomendasi terbaik...', delay: 300 }
     ]
     
@@ -1398,31 +1334,6 @@ export default function DestinasiWisata() {
             </div>
 
             <div className="p-3 sm:p-4 space-y-3 sm:space-y-4">
-              {/* Overnight Question */}
-              <div>
-                <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-2">
-                  Apakah kamu ingin menginap?
-                </label>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { id: false, label: 'Tidak' },
-                    { id: true, label: 'Ya, Menginap' }
-                  ].map(option => (
-                    <button
-                      key={String(option.id)}
-                      onClick={() => handleQuestionnaireChange('overnight', option.id)}
-                      className={`p-2 sm:p-3 border-2 rounded-lg text-center transition-all duration-200 shadow-sm ${
-                        questionnaireData.overnight === option.id
-                          ? 'border-green-600 bg-green-50 text-green-900 shadow-md'
-                          : 'border-gray-300 bg-white text-gray-700 hover:border-green-400 hover:bg-green-50 hover:shadow-md'
-                      }`}
-                    >
-                      <div className="font-semibold text-xs sm:text-sm">{option.label}</div>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
               {/* Budget Question */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-2">
@@ -1430,10 +1341,10 @@ export default function DestinasiWisata() {
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   {[
-                    { id: 'basic', label: 'Hemat', desc: '< Rp 50.000/orang' },
-                    { id: 'value', label: 'Budget', desc: 'Rp 50-150k/orang' },
-                    { id: 'plus', label: 'Menengah', desc: 'Rp 150-300k/orang' },
-                    { id: 'premium', label: 'Premium', desc: '> Rp 300k/orang' }
+                    { id: 'basic', label: 'Hemat', desc: '< Rp 30.000/orang' },
+                    { id: 'value', label: 'Budget', desc: 'Rp 40-50k/orang' },
+                    { id: 'plus', label: 'Menengah', desc: 'Rp 60-80k/orang' },
+                    { id: 'premium', label: 'Premium', desc: '> Rp 80k/orang' }
                   ].map(option => (
                     <button
                       key={option.id}
@@ -1459,8 +1370,8 @@ export default function DestinasiWisata() {
                 <div className="grid grid-cols-3 gap-2">
                   {[
                     { id: 'short', label: 'Singkat', desc: '2-3 jam' },
-                    { id: 'medium', label: 'Sedang', desc: '3-6 jam' },
-                    { id: 'long', label: 'Panjang', desc: '6++ jam' }
+                    { id: 'medium', label: 'Sedang', desc: '3-4 jam' },
+                    { id: 'long', label: 'Panjang', desc: '4++ jam' }
                   ].map(option => (
                     <button
                       key={option.id}
@@ -1517,28 +1428,28 @@ export default function DestinasiWisata() {
                 </div>
               </div>
 
-              {/* Travel Style Question */}
+              {/* Travel Purpose Question */}
               <div>
                 <label className="block text-xs sm:text-sm font-medium text-gray-900 mb-2">
-                  4. Gaya traveling seperti apa yang kamu suka?
+                  4. Apa tujuan utamamu berlibur?
                 </label>
                 <div className="space-y-2">
                   {[
-                    { id: 'adventure', label: 'Petualangan', desc: 'Hiking, trekking, aktivitas menantang' },
-                    { id: 'cultural', label: 'Kultural', desc: 'Belajar sejarah, budaya, tradisi lokal' },
-                    { id: 'relaxed', label: 'Santai', desc: 'Bersantai, foto-foto, menikmati pemandangan' }
+                    { id: 'healing', label: 'Menghilangkan Stress', desc: 'Relaksasi, refreshing, healing' },
+                    { id: 'experience', label: 'Mencari Pengalaman Baru', desc: 'Coba hal baru, keluar zona nyaman' },
+                    { id: 'content', label: 'Dokumentasi & Konten', desc: 'Foto estetik, konten media sosial' }
                   ].map(option => (
                     <button
                       key={option.id}
-                      onClick={() => handleQuestionnaireChange('travelStyle', option.id)}
+                      onClick={() => handleQuestionnaireChange('travelPurpose', option.id)}
                       className={`w-full p-2 sm:p-3 border-2 rounded-lg text-left transition-all duration-200 shadow-sm ${
-                        questionnaireData.travelStyle === option.id
+                        questionnaireData.travelPurpose === option.id
                           ? 'border-blue-600 bg-blue-50 text-blue-900 shadow-md'
                           : 'border-gray-300 bg-white text-gray-700 hover:border-blue-400 hover:bg-blue-50 hover:shadow-md'
                       }`}
                     >
                       <div className="font-semibold text-xs sm:text-sm">{option.label}</div>
-                      <div className={`text-[10px] sm:text-xs ${questionnaireData.travelStyle === option.id ? 'text-blue-600' : 'text-gray-500'}`}>{option.desc}</div>
+                      <div className={`text-[10px] sm:text-xs ${questionnaireData.travelPurpose === option.id ? 'text-blue-600' : 'text-gray-500'}`}>{option.desc}</div>
                     </button>
                   ))}
                 </div>
@@ -1552,9 +1463,9 @@ export default function DestinasiWisata() {
                 <div className="grid grid-cols-2 gap-2">
                   {[
                     { id: 'solo', label: 'Sendiri', desc: 'Solo traveling' },
-                    { id: 'couple', label: 'Berdua', desc: 'Dengan pasangan' },
+                    { id: 'couple', label: 'Berdua', desc: 'Dengan rekan' },
                     { id: 'family', label: 'Keluarga', desc: 'Orang tua & anak' },
-                    { id: 'friends', label: 'Teman', desc: 'Grup teman' }
+                    { id: 'friends', label: 'Grup', desc: 'Grup teman' }
                   ].map(option => (
                     <button
                       key={option.id}
@@ -1682,11 +1593,10 @@ export default function DestinasiWisata() {
                 onClick={() => {
                   // Reset questionnaire data to restart
                   setQuestionnaireData({
-                    overnight: false,
                     budget: '',
                     duration: '',
                     activities: [],
-                    travelStyle: '',
+                    travelPurpose: '',
                     groupSize: '',
                     preferredLocation: ''
                   })
@@ -1700,9 +1610,9 @@ export default function DestinasiWisata() {
               </button>
               <button
                 onClick={processQuestionnaire}
-                disabled={!questionnaireData.budget || !questionnaireData.duration || questionnaireData.activities.length === 0 || !questionnaireData.travelStyle || !questionnaireData.groupSize || isProcessingRecommendations}
+                disabled={!questionnaireData.budget || !questionnaireData.duration || questionnaireData.activities.length === 0 || !questionnaireData.travelPurpose || !questionnaireData.groupSize || isProcessingRecommendations}
                 className={`px-3 sm:px-4 py-2 rounded transition-all duration-200 text-xs sm:text-sm flex items-center gap-2 ${
-                  questionnaireData.budget && questionnaireData.duration && questionnaireData.activities.length > 0 && questionnaireData.travelStyle && questionnaireData.groupSize && !isProcessingRecommendations
+                  questionnaireData.budget && questionnaireData.duration && questionnaireData.activities.length > 0 && questionnaireData.travelPurpose && questionnaireData.groupSize && !isProcessingRecommendations
                     ? 'bg-blue-600 text-white hover:bg-blue-700'
                     : 'bg-gray-300 text-gray-500 cursor-not-allowed'
                 }`}
@@ -1916,11 +1826,10 @@ export default function DestinasiWisata() {
                   setShowPersonalizedResults(false)
                   // Reset questionnaire data
                   setQuestionnaireData({
-                    overnight: false,
                     budget: '',
                     duration: '',
                     activities: [],
-                    travelStyle: '',
+                    travelPurpose: '',
                     groupSize: '',
                     preferredLocation: ''
                   })
